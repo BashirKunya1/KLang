@@ -1,4 +1,5 @@
 using KLang.Compiler.Lexing;
+using Xunit;
 
 namespace KLang.Compiler.Tests;
 
