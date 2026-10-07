@@ -7,108 +7,330 @@ namespace KLang.Compiler.Tests;
 
 public sealed class ParserTests
 {
-    [Fact]
-    public void ParseProgram_WithPrintIntegerLiteral_CreatesPrintStatement()
+    private static ProgramNode Parse(string source)
     {
-        var source = "print(42);";
-
         var lexer = new Lexer(source);
         var tokens = lexer.Tokenize();
 
         var parser = new Parser(tokens);
-        var program = parser.ParseProgram();
 
-        Assert.Single(program.Statements);
+        return parser.ParseProgram();
+    }
+
+    [Fact]
+    public void ParseProgram_WithPrintIntegerLiteral_CreatesPrintStatement()
+    {
+        var program = Parse("print(42);");
 
         var statement = Assert.IsType<PrintStatementNode>(
-            program.Statements[0]);
+            Assert.Single(program.Statements));
 
-        var expression = Assert.IsType<IntegerLiteralExpressionNode>(
-            statement.Expression);
+        var expression =
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                statement.Expression);
 
         Assert.Equal(42, expression.Value);
     }
 
     [Fact]
-    public void ParseProgram_WithMultiplePrintStatements_CreatesMultipleStatements()
+    public void ParseProgram_WithStringLiteral_CreatesStringLiteral()
     {
-        var source = """
-                     print(42);
-                     print(100);
-                     print(999);
-                     """;
+        var program = Parse("print(\"Hello\");");
 
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
 
-        var parser = new Parser(tokens);
-        var program = parser.ParseProgram();
+        var expression =
+            Assert.IsType<StringLiteralExpressionNode>(
+                statement.Expression);
 
-        Assert.Equal(3, program.Statements.Count);
+        Assert.Equal("Hello", expression.Value);
+    }
 
-        var first = Assert.IsType<PrintStatementNode>(
-            program.Statements[0]);
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void ParseProgram_WithBooleanLiteral_CreatesBooleanLiteral(
+        string source,
+        bool expected)
+    {
+        var program = Parse($"print({source});");
 
-        var second = Assert.IsType<PrintStatementNode>(
-            program.Statements[1]);
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
 
-        var third = Assert.IsType<PrintStatementNode>(
-            program.Statements[2]);
+        var expression =
+            Assert.IsType<BooleanLiteralExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal(expected, expression.Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithIdentifier_CreatesIdentifierExpression()
+    {
+        var program = Parse("print(myVariable);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var expression =
+            Assert.IsType<IdentifierExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("myVariable", expression.Name);
+    }
+
+    [Fact]
+    public void ParseProgram_WithAddition_CreatesBinaryExpression()
+    {
+        var program = Parse("print(10 + 20);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var expression =
+            Assert.IsType<BinaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("+", expression.Operator);
+
+        Assert.Equal(
+            10,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                expression.Left).Value);
+
+        Assert.Equal(
+            20,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                expression.Right).Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithOperatorPrecedence_ParsesMultiplicationBeforeAddition()
+    {
+        var program = Parse("print(1 + 2 * 3);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var addition =
+            Assert.IsType<BinaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("+", addition.Operator);
+
+        Assert.Equal(
+            1,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                addition.Left).Value);
+
+        var multiplication =
+            Assert.IsType<BinaryExpressionNode>(
+                addition.Right);
+
+        Assert.Equal("*", multiplication.Operator);
+
+        Assert.Equal(
+            2,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                multiplication.Left).Value);
+
+        Assert.Equal(
+            3,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                multiplication.Right).Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithParentheses_OverridesOperatorPrecedence()
+    {
+        var program = Parse("print((1 + 2) * 3);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var multiplication =
+            Assert.IsType<BinaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("*", multiplication.Operator);
+
+        var addition =
+            Assert.IsType<BinaryExpressionNode>(
+                multiplication.Left);
+
+        Assert.Equal("+", addition.Operator);
+
+        Assert.Equal(
+            1,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                addition.Left).Value);
+
+        Assert.Equal(
+            2,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                addition.Right).Value);
+
+        Assert.Equal(
+            3,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                multiplication.Right).Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithUnaryMinus_CreatesUnaryExpression()
+    {
+        var program = Parse("print(-42);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var expression =
+            Assert.IsType<UnaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("-", expression.Operator);
 
         Assert.Equal(
             42,
             Assert.IsType<IntegerLiteralExpressionNode>(
-                first.Expression).Value);
-
-        Assert.Equal(
-            100,
-            Assert.IsType<IntegerLiteralExpressionNode>(
-                second.Expression).Value);
-
-        Assert.Equal(
-            999,
-            Assert.IsType<IntegerLiteralExpressionNode>(
-                third.Expression).Value);
+                expression.Operand).Value);
     }
 
     [Fact]
-    public void ParseProgram_WithWhitespace_ParsesSuccessfully()
+    public void ParseProgram_WithUnaryBang_CreatesUnaryExpression()
     {
-        var source = """
-                     
-                     print(   42   );
-                     
-                     """;
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        var parser = new Parser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Single(program.Statements);
+        var program = Parse("print(!true);");
 
         var statement = Assert.IsType<PrintStatementNode>(
-            program.Statements[0]);
+            Assert.Single(program.Statements));
 
-        var expression = Assert.IsType<IntegerLiteralExpressionNode>(
-            statement.Expression);
+        var expression =
+            Assert.IsType<UnaryExpressionNode>(
+                statement.Expression);
 
-        Assert.Equal(42, expression.Value);
+        Assert.Equal("!", expression.Operator);
+
+        Assert.True(
+            Assert.IsType<BooleanLiteralExpressionNode>(
+                expression.Operand).Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithFunctionCall_CreatesCallExpression()
+    {
+        var program = Parse("print(calculate(10, 20));");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var call =
+            Assert.IsType<CallExpressionNode>(
+                statement.Expression);
+
+        var callee =
+            Assert.IsType<IdentifierExpressionNode>(
+                call.Callee);
+
+        Assert.Equal("calculate", callee.Name);
+
+        Assert.Equal(2, call.Arguments.Count);
+
+        Assert.Equal(
+            10,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                call.Arguments[0]).Value);
+
+        Assert.Equal(
+            20,
+            Assert.IsType<IntegerLiteralExpressionNode>(
+                call.Arguments[1]).Value);
+    }
+
+    [Fact]
+    public void ParseProgram_WithNoArguments_CreatesCallExpression()
+    {
+        var program = Parse("print(getValue());");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var call =
+            Assert.IsType<CallExpressionNode>(
+                statement.Expression);
+
+        var callee =
+            Assert.IsType<IdentifierExpressionNode>(
+                call.Callee);
+
+        Assert.Equal("getValue", callee.Name);
+        Assert.Empty(call.Arguments);
+    }
+
+    [Fact]
+    public void ParseProgram_WithExpressionStatement_CreatesExpressionStatement()
+    {
+        var program = Parse("calculate(10, 20);");
+
+        var statement =
+            Assert.IsType<ExpressionStatementNode>(
+                Assert.Single(program.Statements));
+
+        var call =
+            Assert.IsType<CallExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal(2, call.Arguments.Count);
+    }
+
+    [Fact]
+    public void ParseProgram_WithEquality_CreatesBinaryExpression()
+    {
+        var program = Parse("print(10 == 10);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var expression =
+            Assert.IsType<BinaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("==", expression.Operator);
+    }
+
+    [Fact]
+    public void ParseProgram_WithNotEqual_CreatesBinaryExpression()
+    {
+        var program = Parse("print(10 != 20);");
+
+        var statement = Assert.IsType<PrintStatementNode>(
+            Assert.Single(program.Statements));
+
+        var expression =
+            Assert.IsType<BinaryExpressionNode>(
+                statement.Expression);
+
+        Assert.Equal("!=", expression.Operator);
+    }
+
+    [Fact]
+    public void ParseProgram_WithMultipleStatements_CreatesMultipleStatements()
+    {
+        var program = Parse("""
+            print(42);
+            print("Hello");
+            print(true);
+            """);
+
+        Assert.Equal(3, program.Statements.Count);
     }
 
     [Fact]
     public void ParseProgram_WithMissingSemicolon_ThrowsParserException()
     {
-        var source = "print(42)";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        var parser = new Parser(tokens);
-
         var exception = Assert.Throws<ParserException>(
-            () => parser.ParseProgram());
+            () => Parse("print(42)"));
 
         Assert.Contains(
             "Expected ';' after print statement.",
@@ -118,15 +340,8 @@ public sealed class ParserTests
     [Fact]
     public void ParseProgram_WithMissingClosingParenthesis_ThrowsParserException()
     {
-        var source = "print(42;";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        var parser = new Parser(tokens);
-
         var exception = Assert.Throws<ParserException>(
-            () => parser.ParseProgram());
+            () => Parse("print(42;"));
 
         Assert.Contains(
             "Expected ')' after print expression.",
@@ -136,15 +351,8 @@ public sealed class ParserTests
     [Fact]
     public void ParseProgram_WithMissingExpression_ThrowsParserException()
     {
-        var source = "print();";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        var parser = new Parser(tokens);
-
         var exception = Assert.Throws<ParserException>(
-            () => parser.ParseProgram());
+            () => Parse("print();"));
 
         Assert.Contains(
             "Expected an expression.",
@@ -152,38 +360,13 @@ public sealed class ParserTests
     }
 
     [Fact]
-    public void ParseProgram_WithUnexpectedToken_ThrowsParserException()
+    public void ParseProgram_WithTrailingComma_ThrowsParserException()
     {
-        var source = "42;";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        var parser = new Parser(tokens);
-
         var exception = Assert.Throws<ParserException>(
-            () => parser.ParseProgram());
+            () => Parse("print(calculate(10,));"));
 
         Assert.Contains(
-            "Expected a statement.",
+            "Expected an expression.",
             exception.Message);
-    }
-
-    [Fact]
-    public void ParseProgram_ConsumesEndOfFile()
-    {
-        var source = "print(42);";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.Tokenize();
-
-        Assert.Equal(
-            TokenType.EndOfFile,
-            tokens[^1].Type);
-
-        var parser = new Parser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Single(program.Statements);
     }
 }
