@@ -1,3 +1,4 @@
+
 namespace KLang.Compiler.Lexing;
 
 public enum TokenType
@@ -14,15 +15,26 @@ public enum TokenType
     // Identifiers
     Identifier,
 
-    // Operators
+    // Arithmetic operators
     Plus,
     Minus,
     Star,
     Slash,
+    Percent,
 
-    Bang,
+    // Comparison and equality operators
+    Equal,
     EqualEqual,
     NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+
+    // Logical operators
+    Bang,
+    AndAnd,
+    OrOr,
 
     // Punctuation
     LeftParen,

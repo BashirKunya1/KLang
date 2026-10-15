@@ -1,3 +1,6 @@
+
+using System.Text;
+
 namespace KLang.Compiler.Lexing;
 
 public sealed class Lexer
@@ -7,6 +10,7 @@ public sealed class Lexer
 
     public Lexer(string source)
     {
+        ArgumentNullException.ThrowIfNull(source);
         _source = source;
     }
 
@@ -19,6 +23,18 @@ public sealed class Lexer
             if (char.IsWhiteSpace(Current))
             {
                 Advance();
+                continue;
+            }
+
+            if (Current == '/' && Peek() == '/')
+            {
+                SkipLineComment();
+                continue;
+            }
+
+            if (Current == '/' && Peek() == '*')
+            {
+                SkipBlockComment();
                 continue;
             }
 
@@ -42,44 +58,94 @@ public sealed class Lexer
                 continue;
             }
 
+            // Process two-character operators before single-character ones.
+            if (Current == '!' && Peek() == '=')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.NotEqual, start));
+                continue;
+            }
+
+            if (Current == '=' && Peek() == '=')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.EqualEqual, start));
+                continue;
+            }
+
+            if (Current == '<' && Peek() == '=')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.LessEqual, start));
+                continue;
+            }
+
+            if (Current == '>' && Peek() == '=')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.GreaterEqual, start));
+                continue;
+            }
+
+            if (Current == '&' && Peek() == '&')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.AndAnd, start));
+                continue;
+            }
+
+            if (Current == '|' && Peek() == '|')
+            {
+                tokens.Add(ReadTwoCharacterToken(
+                    TokenType.OrOr, start));
+                continue;
+            }
+
             var token = Current switch
             {
                 '(' => new Token(TokenType.LeftParen, "(", start),
                 ')' => new Token(TokenType.RightParen, ")", start),
                 ',' => new Token(TokenType.Comma, ",", start),
                 ';' => new Token(TokenType.Semicolon, ";", start),
+
                 '+' => new Token(TokenType.Plus, "+", start),
                 '-' => new Token(TokenType.Minus, "-", start),
                 '*' => new Token(TokenType.Star, "*", start),
                 '/' => new Token(TokenType.Slash, "/", start),
-                '!' when Peek() == '=' =>
-                    ReadTwoCharacterToken(
-                    TokenType.NotEqual,
-                    start),
+                '%' => new Token(TokenType.Percent, "%", start),
 
                 '!' => new Token(TokenType.Bang, "!", start),
+                '=' => new Token(TokenType.Equal, "=", start),
+                '<' => new Token(TokenType.Less, "<", start),
+                '>' => new Token(TokenType.Greater, ">", start),
 
-                '=' when Peek() == '=' =>
-                    ReadTwoCharacterToken(
-                        TokenType.EqualEqual,
-                        start),
-                _ => throw new LexerException($"Unexpected character '{Current}' at position {start}.")
+                _ => throw new LexerException(
+                    $"Unexpected character '{Current}' at position {start}.")
             };
 
             Advance();
             tokens.Add(token);
         }
 
-        tokens.Add(new Token(TokenType.EndOfFile, string.Empty, _position));
+        tokens.Add(new Token(
+            TokenType.EndOfFile,
+            string.Empty,
+            _position));
+
         return tokens;
     }
 
     private Token ReadInteger(int start)
     {
         while (!IsAtEnd && char.IsDigit(Current))
+        {
             Advance();
+        }
 
-        return new Token(TokenType.IntegerLiteral, _source[start.._position], start);
+        return new Token(
+            TokenType.IntegerLiteral,
+            _source[start.._position],
+            start);
     }
 
     private Token ReadIdentifierOrKeyword(int start)
@@ -100,21 +166,24 @@ public sealed class Lexer
             _ => TokenType.Identifier
         };
 
-        return new Token(
-            type,
-            lexeme,
-            start);
+        return new Token(type, lexeme, start);
     }
 
     private Token ReadString(int start)
     {
-        // Opening quote.
+        // Consume the opening quote.
         Advance();
 
-        var valueStart = _position;
+        var value = new StringBuilder();
 
         while (!IsAtEnd && Current != '"')
         {
+            if (Current == '\n' || Current == '\r')
+            {
+                throw new LexerException(
+                    $"Unterminated string literal at position {start}.");
+            }
+
             if (Current == '\\')
             {
                 Advance();
@@ -124,8 +193,26 @@ public sealed class Lexer
                     throw new LexerException(
                         $"Unterminated string literal at position {start}.");
                 }
+
+                var escapedCharacter = Current switch
+                {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '\\' => '\\',
+                    '"' => '"',
+
+                    _ => throw new LexerException(
+                        $"Invalid escape sequence '\\{Current}' " +
+                        $"at position {_position - 1}.")
+                };
+
+                value.Append(escapedCharacter);
+                Advance();
+                continue;
             }
 
+            value.Append(Current);
             Advance();
         }
 
@@ -135,44 +222,73 @@ public sealed class Lexer
                 $"Unterminated string literal at position {start}.");
         }
 
-        var lexeme = _source[valueStart.._position];
-
-        // Closing quote.
+        // Consume the closing quote.
         Advance();
 
         return new Token(
             TokenType.StringLiteral,
-            lexeme,
+            value.ToString(),
             start);
     }
 
-    private Token ReadTwoCharacterToken(
-    TokenType type,
-    int start)
+    private void SkipLineComment()
     {
-        var first = Current;
+        // Consume //
+        Advance();
         Advance();
 
-        var second = Current;
+        while (!IsAtEnd && Current != '\n')
+        {
+            Advance();
+        }
+    }
+
+    private void SkipBlockComment()
+    {
+        var start = _position;
+
+        // Consume /*
+        Advance();
         Advance();
 
-        return new Token(
-            type,
-            $"{first}{second}",
-            start);
+        while (!IsAtEnd)
+        {
+            if (Current == '*' && Peek() == '/')
+            {
+                // Consume */
+                Advance();
+                Advance();
+                return;
+            }
+
+            Advance();
+        }
+
+        throw new LexerException(
+            $"Unterminated block comment at position {start}.");
+    }
+
+    private Token ReadTwoCharacterToken(
+        TokenType type,
+        int start)
+    {
+        var lexeme = _source.Substring(start, 2);
+
+        Advance();
+        Advance();
+
+        return new Token(type, lexeme, start);
     }
 
     private char Peek()
     {
-        if (_position + 1 >= _source.Length)
-        {
-            return '\0';
-        }
-
-        return _source[_position + 1];
+        return _position + 1 < _source.Length
+            ? _source[_position + 1]
+            : '\0';
     }
 
     private bool IsAtEnd => _position >= _source.Length;
+
     private char Current => _source[_position];
 
     private void Advance() => _position++;
