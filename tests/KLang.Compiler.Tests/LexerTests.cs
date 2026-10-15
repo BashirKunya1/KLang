@@ -158,4 +158,124 @@ public sealed class LexerTests
             "Unterminated string literal",
             exception.Message);
     }
+
+    
+[Fact]
+public void Tokenize_WithComparisonAndLogicalOperators_ReturnsCorrectTokens()
+{
+    var tokens = new Lexer("a = 10 < 20 <= 30 > 5 >= 2 && true || false").Tokenize();
+
+    Assert.Equal(
+        new[]
+        {
+            TokenType.Identifier,
+            TokenType.Equal,
+            TokenType.IntegerLiteral,
+            TokenType.Less,
+            TokenType.IntegerLiteral,
+            TokenType.LessEqual,
+            TokenType.IntegerLiteral,
+            TokenType.Greater,
+            TokenType.IntegerLiteral,
+            TokenType.GreaterEqual,
+            TokenType.IntegerLiteral,
+            TokenType.AndAnd,
+            TokenType.TrueKeyword,
+            TokenType.OrOr,
+            TokenType.FalseKeyword,
+            TokenType.EndOfFile
+        },
+        tokens.Select(token => token.Type).ToArray());
+}
+
+[Fact]
+public void Tokenize_WithComments_IgnoresCommentContents()
+{
+    var tokens = new Lexer(
+        "print(1); // line comment\n/* block comment */ print(2);")
+        .Tokenize();
+
+    Assert.Equal(
+        new[]
+        {
+            TokenType.PrintKeyword,
+            TokenType.LeftParen,
+            TokenType.IntegerLiteral,
+            TokenType.RightParen,
+            TokenType.Semicolon,
+            TokenType.PrintKeyword,
+            TokenType.LeftParen,
+            TokenType.IntegerLiteral,
+            TokenType.RightParen,
+            TokenType.Semicolon,
+            TokenType.EndOfFile
+        },
+        tokens.Select(token => token.Type).ToArray());
+}
+
+[Fact]
+public void Tokenize_WithEscapedString_DecodesEscapeSequences()
+{
+    var tokens = new Lexer(
+        "print(\"Hello\\nWorld\\t\\\"KLang\\\"\");")
+        .Tokenize();
+
+    Assert.Equal(
+        "Hello\nWorld\t\"KLang\"",
+        tokens[2].Lexeme);
+}
+
+[Fact]
+public void Tokenize_WithInvalidEscape_ThrowsLexerException()
+{
+    var exception = Assert.Throws<LexerException>(
+        () => new Lexer("print(\"bad\\q\");").Tokenize());
+
+    Assert.Contains("Invalid escape sequence", exception.Message);
+}
+
+[Fact]
+public void Tokenize_WithUnterminatedBlockComment_ThrowsLexerException()
+{
+    var exception = Assert.Throws<LexerException>(
+        () => new Lexer("print(1); /* unfinished").Tokenize());
+
+    Assert.Contains("Unterminated block comment", exception.Message);
+}
+
+[Fact]
+public void Tokenize_WithModuloOperator_ReturnsPercentToken()
+{
+    var tokens = new Lexer("10 % 3").Tokenize();
+
+    Assert.Equal(TokenType.IntegerLiteral, tokens[0].Type);
+    Assert.Equal(TokenType.Percent, tokens[1].Type);
+    Assert.Equal("%", tokens[1].Lexeme);
+    Assert.Equal(TokenType.IntegerLiteral, tokens[2].Type);
+    Assert.Equal(TokenType.EndOfFile, tokens[3].Type);
+}
+
+[Fact]
+public void Tokenize_WithAllArithmeticOperators_ReturnsCorrectTokens()
+{
+    var tokens = new Lexer("1 + 2 - 3 * 4 / 5 % 2").Tokenize();
+
+    Assert.Equal(
+        new[]
+        {
+            TokenType.IntegerLiteral,
+            TokenType.Plus,
+            TokenType.IntegerLiteral,
+            TokenType.Minus,
+            TokenType.IntegerLiteral,
+            TokenType.Star,
+            TokenType.IntegerLiteral,
+            TokenType.Slash,
+            TokenType.IntegerLiteral,
+            TokenType.Percent,
+            TokenType.IntegerLiteral,
+            TokenType.EndOfFile
+        },
+        tokens.Select(token => token.Type).ToArray());
+}
 }

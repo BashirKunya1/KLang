@@ -1,4 +1,5 @@
-﻿using KLang.Compiler.Ast;
+﻿
+using KLang.Compiler.Ast;
 using KLang.Compiler.Lexing;
 
 namespace KLang.Compiler.Parsing;
@@ -10,6 +11,16 @@ public sealed class Parser
 
     public Parser(IReadOnlyList<Token> tokens)
     {
+        ArgumentNullException.ThrowIfNull(tokens);
+
+        if (tokens.Count == 0 ||
+            tokens[^1].Type != TokenType.EndOfFile)
+        {
+            throw new ArgumentException(
+                "Token sequence must end with an EndOfFile token.",
+                nameof(tokens));
+        }
+
         _tokens = tokens;
     }
 
@@ -69,18 +80,77 @@ public sealed class Parser
         return new ExpressionStatementNode(expression);
     }
 
+    // Lowest precedence: ||
     private ExpressionNode ParseExpression()
     {
-        return ParseEquality();
+        return ParseLogicalOr();
+    }
+
+    private ExpressionNode ParseLogicalOr()
+    {
+        var expression = ParseLogicalAnd();
+
+        while (Match(TokenType.OrOr))
+        {
+            var operatorToken = Previous;
+            var right = ParseLogicalAnd();
+
+            expression = new BinaryExpressionNode(
+                expression,
+                operatorToken.Lexeme,
+                right);
+        }
+
+        return expression;
+    }
+
+    private ExpressionNode ParseLogicalAnd()
+    {
+        var expression = ParseEquality();
+
+        while (Match(TokenType.AndAnd))
+        {
+            var operatorToken = Previous;
+            var right = ParseEquality();
+
+            expression = new BinaryExpressionNode(
+                expression,
+                operatorToken.Lexeme,
+                right);
+        }
+
+        return expression;
     }
 
     private ExpressionNode ParseEquality()
     {
-        var expression = ParseAdditive();
+        var expression = ParseComparison();
 
         while (Match(
             TokenType.EqualEqual,
             TokenType.NotEqual))
+        {
+            var operatorToken = Previous;
+            var right = ParseComparison();
+
+            expression = new BinaryExpressionNode(
+                expression,
+                operatorToken.Lexeme,
+                right);
+        }
+
+        return expression;
+    }
+
+    private ExpressionNode ParseComparison()
+    {
+        var expression = ParseAdditive();
+
+        while (Match(
+            TokenType.Less,
+            TokenType.LessEqual,
+            TokenType.Greater,
+            TokenType.GreaterEqual))
         {
             var operatorToken = Previous;
             var right = ParseAdditive();
@@ -120,7 +190,8 @@ public sealed class Parser
 
         while (Match(
             TokenType.Star,
-            TokenType.Slash))
+            TokenType.Slash,
+            TokenType.Percent))
         {
             var operatorToken = Previous;
             var right = ParseUnary();
@@ -193,9 +264,7 @@ public sealed class Parser
         {
             var token = Previous;
 
-            if (!int.TryParse(
-                    token.Lexeme,
-                    out var value))
+            if (!int.TryParse(token.Lexeme, out var value))
             {
                 throw Error(
                     token,
@@ -287,11 +356,9 @@ public sealed class Parser
         return Previous;
     }
 
-    private Token Current =>
-        _tokens[_current];
+    private Token Current => _tokens[_current];
 
-    private Token Previous =>
-        _tokens[_current - 1];
+    private Token Previous => _tokens[_current - 1];
 
     private ParserException Error(
         Token token,

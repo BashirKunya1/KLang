@@ -369,4 +369,142 @@ public sealed class ParserTests
             "Expected an expression.",
             exception.Message);
     }
+
+    
+[Fact]
+public void ParseExpression_WithModulo_CreatesBinaryExpression()
+{
+    var program = Parse("print(10 % 3);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var expression = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("%", expression.Operator);
+    Assert.Equal(
+        10,
+        Assert.IsType<IntegerLiteralExpressionNode>(
+            expression.Left).Value);
+    Assert.Equal(
+        3,
+        Assert.IsType<IntegerLiteralExpressionNode>(
+            expression.Right).Value);
+}
+
+[Fact]
+public void ParseExpression_MultiplicationHasHigherPrecedenceThanAddition()
+{
+    var program = Parse("print(1 + 2 * 3);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var addition = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("+", addition.Operator);
+    Assert.IsType<IntegerLiteralExpressionNode>(addition.Left);
+
+    var multiplication = Assert.IsType<BinaryExpressionNode>(
+        addition.Right);
+
+    Assert.Equal("*", multiplication.Operator);
+}
+
+[Fact]
+public void ParseExpression_ComparisonHasHigherPrecedenceThanEquality()
+{
+    var program = Parse("print(1 < 2 == true);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var equality = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("==", equality.Operator);
+
+    var comparison = Assert.IsType<BinaryExpressionNode>(
+        equality.Left);
+
+    Assert.Equal("<", comparison.Operator);
+}
+
+[Fact]
+public void ParseExpression_LogicalAndHasHigherPrecedenceThanLogicalOr()
+{
+    var program = Parse("print(true || false && true);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var logicalOr = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("||", logicalOr.Operator);
+
+    var logicalAnd = Assert.IsType<BinaryExpressionNode>(
+        logicalOr.Right);
+
+    Assert.Equal("&&", logicalAnd.Operator);
+}
+
+[Fact]
+public void ParseExpression_SubtractionIsLeftAssociative()
+{
+    var program = Parse("print(10 - 3 - 2);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var outer = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("-", outer.Operator);
+
+    var inner = Assert.IsType<BinaryExpressionNode>(
+        outer.Left);
+
+    Assert.Equal("-", inner.Operator);
+}
+
+[Fact]
+public void ParseExpression_UnaryOperatorBindsMoreTightlyThanMultiplication()
+{
+    var program = Parse("print(-2 * 3);");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var multiplication = Assert.IsType<BinaryExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal("*", multiplication.Operator);
+
+    var unary = Assert.IsType<UnaryExpressionNode>(
+        multiplication.Left);
+
+    Assert.Equal("-", unary.Operator);
+}
+
+[Fact]
+public void ParseExpression_FunctionCallsCanBeNested()
+{
+    var program = Parse("print(calculate(10, multiply(2, 3)));");
+
+    var statement = Assert.IsType<PrintStatementNode>(
+        Assert.Single(program.Statements));
+
+    var outerCall = Assert.IsType<CallExpressionNode>(
+        statement.Expression);
+
+    Assert.Equal(2, outerCall.Arguments.Count);
+
+    var nestedCall = Assert.IsType<CallExpressionNode>(
+        outerCall.Arguments[1]);
+
+    Assert.Equal(2, nestedCall.Arguments.Count);
+}
 }
