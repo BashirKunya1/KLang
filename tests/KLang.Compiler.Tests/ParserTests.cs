@@ -507,4 +507,12 @@ public void ParseExpression_FunctionCallsCanBeNested()
 
     Assert.Equal(2, nestedCall.Arguments.Count);
 }
+
+[Fact]
+public void ParseProgram_WithEmptyInput_ReturnsEmptyProgram()
+{
+    var program = Parse("");
+
+    Assert.Empty(program.Statements);
+}
 }
