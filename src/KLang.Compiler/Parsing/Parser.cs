@@ -348,12 +348,14 @@ public sealed class Parser
 
     private Token Advance()
     {
+        var token = Current;
+    
         if (!Check(TokenType.EndOfFile))
         {
             _current++;
         }
-
-        return Previous;
+    
+        return token;
     }
 
     private Token Current => _tokens[_current];
